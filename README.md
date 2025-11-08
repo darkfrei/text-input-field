@@ -2,6 +2,9 @@
 
 A lightweight UTF-8 compatible text input field module for LÖVE2D.
 
+![Text Input Field Demo](text-input-field-01.png)
+
+
 This module provides a standalone multiline text input widget with full UTF-8 support, mouse selection, cursor control, keyboard shortcuts, and visual indentation. It is suitable for text editors, debug consoles, chat interfaces, or any UI requiring text input.
 
 ---
@@ -291,4 +294,5 @@ This module is provided as-is for use in any project.
 - Text selection is stored as cursor positions, not screen coordinates
 - Clicking outside the field deactivates it
 - Only one field can be active at a time
+
 - The cache is thread-safe for single-threaded use (standard LÖVE)
