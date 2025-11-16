@@ -51,8 +51,8 @@ local function getWrappedLinesWithStarts(font, textStr, maxWidth, maxIndent)
 	end
 	if #textStr > 0 then pos = pos - 1 end
 	return #lines > 0 and lines or {""}, 
-		#starts > 0 and starts or {0},
-		#isNewLine > 0 and isNewLine or {true}
+	#starts > 0 and starts or {0},
+	#isNewLine > 0 and isNewLine or {true}
 end
 
 -- creates new text input field instance
@@ -74,7 +74,7 @@ function TextInputField:new(config)
 	else
 		instance.text = config.text or ""
 	end
-	
+
 	instance.cursorPos = config.cursorPos or 0
 	instance.desiredCursorX = nil
 	instance.isActive = false
@@ -120,6 +120,15 @@ function TextInputField:new(config)
 	end
 	instance:updateHeight()
 
+
+	instance.hintText = config.hintText or nil
+	instance.hintDelay = config.hintDelay or 1
+	instance.hintTimer = 0
+	instance.hintVisible = false
+	instance.mouseOverField = false
+	instance.lastMouseX = 0
+	instance.lastMouseY = 0
+
 	return instance
 end
 
@@ -128,13 +137,14 @@ function TextInputField:finalizeNumericText()
 	if not self.numeric then
 		return
 	end
-	
-	self.text = tostring(self.text)
-	local normalizedText = self.text:gsub(",", ".")
+
+	local normalizedText = tostring(self.text):gsub(",", ".")
 	local num = tonumber(normalizedText)
 
 	if not num then
-		self.text = ""
+		self.text = 0
+		self:invalidateCache()
+		self:updateBoundValue()
 		return
 	end
 
@@ -144,11 +154,13 @@ function TextInputField:finalizeNumericText()
 	end
 
 	if self.numeric == "integer" or self.numeric == "int" then
-		num = math.floor(num + 0.5)
+		self.text = math.floor(num + 0.5)
+	else
+		self.text = num
 	end
 
-	self.text = tostring(num)
-	self.cacheValid = false
+	self:invalidateCache()
+	self:updateBoundValue()
 end
 
 -- sets field active/inactive state with callbacks
@@ -158,6 +170,14 @@ function TextInputField:setActive(active)
 	end
 
 	self.isActive = active
+
+
+	-- hide hint when field becomes active
+	if active then
+		self.hintVisible = false
+		self.hintTimer = 0
+	end
+
 
 	if not active then
 		self:finalizeNumericText()
@@ -283,11 +303,18 @@ function TextInputField:moveCursorVertical(direction)
 	self:ensureCursorVisible()
 end
 
+-- checks if mouse is over field
+function TextInputField:isMouseOver(mx, my)
+	return mx >= self.x and mx <= self.x + self.w and 
+	my >= self.y and my <= self.y + self.h
+end
+
 -- handles mouse click to activate field and position cursor
 function TextInputField:mousepressed(mx, my, button)
 	if button ~= 1 then return false end
 
 	if mx < self.x or mx > self.x + self.w or my < self.y or my > self.y + self.h then
+--	if self:isMouseOver(mx, my) then
 		self:setActive(false)
 		self:clearSelection()
 		return false
@@ -340,6 +367,8 @@ function TextInputField:mousepressed(mx, my, button)
 
 	return true
 end
+
+
 
 -- handles mouse drag to update selection
 function TextInputField:mousemoved(mx, my, dx, dy)
@@ -427,20 +456,23 @@ end
 -- updates bound table value from current text
 function TextInputField:updateBoundValue()
 	if not self.boundTable or not self.boundKey then return end
-
+	
 	if not self.numeric then
 		self.boundTable[self.boundKey] = self.text
 		return
 	end
-
-	if self.text == "" or self.text == "-" or self.text == "-." then
+	
+	-- numeric field
+	local textStr = tostring(self.text)
+	
+	if textStr == "" or textStr == "-" or textStr == "-." then
 		self.boundTable[self.boundKey] = nil
 		return
 	end
-
-	local normalizedText = self.text:gsub(",", ".")
+	
+	local normalizedText = textStr:gsub(",", ".")
 	local num = tonumber(normalizedText)
-
+	
 	if num and self:isWithinRange(num) then
 		if self.numeric == "integer" or self.numeric == "int" then
 			self.boundTable[self.boundKey] = math.floor(num)
@@ -479,7 +511,7 @@ function TextInputField:updateCache()
 	end
 
 	self.cachedLines, self.cachedStarts, self.cachedIsNewLine = 
-		getWrappedLinesWithStarts(self.font, text, maxWidth, maxIndent)
+	getWrappedLinesWithStarts(self.font, text, maxWidth, maxIndent)
 	self.cacheValid = true
 end
 
@@ -694,6 +726,30 @@ local function drawIndentSymbols(self, allLines, allStarts, allIsNewLine)
 	end
 end
 
+local function drawHintText (self)
+	-- draw hint text if visible
+	if self.hintVisible and self.hintText then
+--		local hintX = self.x + self.w + 10
+		local hintX = self.x + 10
+		local hintY = self.y + 10
+
+		-- background for hint
+		local hintWidth = self.font:getWidth(self.hintText) + 10
+		local hintHeight = self.font:getHeight() + 6
+
+		love.graphics.setColor(0.2, 0.2, 0.2, 0.9)
+		love.graphics.rectangle("fill", hintX, hintY, hintWidth, hintHeight, 3, 3)
+
+		-- border
+		love.graphics.setColor(0.6, 0.6, 0.3, 0.9)
+		love.graphics.rectangle("line", hintX, hintY, hintWidth, hintHeight, 3, 3)
+
+		-- text
+		love.graphics.setColor(1, 1, 0.7)
+		love.graphics.print(self.hintText, hintX+5, hintY)
+	end
+end
+
 -- renders the text input field
 function TextInputField:draw()
 	local allLines, allStarts, allIsNewLine = self:getWrappedLines()
@@ -707,6 +763,11 @@ function TextInputField:draw()
 	drawSelection(self, allLines, allStarts, allIsNewLine)
 	drawIndentSymbols(self, allLines, allStarts, allIsNewLine)
 	drawBlinkingCursor(self, allLines, allStarts, allIsNewLine)
+
+
+	drawHintText (self)
+
+
 end
 
 -- performs single key action
@@ -833,8 +894,8 @@ function TextInputField:keypressed(key, scancode)
 		elseif key == "x" then
 			if hasSelection then
 				local s, e = self:getSelectionRange()
-				
-	local selectedText = utf8.sub(self.text, s, e)
+
+				local selectedText = utf8.sub(self.text, s, e)
 				love.system.setClipboardText(selectedText)
 				self:replaceSelection(nil)
 				self:updateDesiredX()
@@ -997,6 +1058,39 @@ end
 
 -- handles key repeat in update loop
 function TextInputField:update(dt)
+
+	local mx, my = love.mouse.getPosition ()
+
+	--------------------
+	-- handle hint text visibility
+	if self.hintText then
+
+		local mouseOver = self:isMouseOver(mx, my)
+
+		if mouseOver and not self.isActive then
+			-- check if mouse moved
+			if mx ~= self.lastMouseX or my ~= self.lastMouseY then
+				self.hintTimer = 0
+				self.hintVisible = false
+				self.lastMouseX = mx
+				self.lastMouseY = my
+			else
+				-- mouse stationary, increment timer
+				self.hintTimer = self.hintTimer + dt
+				if self.hintTimer >= self.hintDelay then
+					self.hintVisible = true
+				end
+			end
+		else
+			-- mouse not over or field is active
+			self.hintTimer = 0
+			self.hintVisible = false
+		end
+	end
+
+	--------------------
+
+	-- handle key repeat
 	if not self.isActive or not self.repeatKey then return end
 
 	self.repeatTimer = self.repeatTimer + dt
@@ -1012,6 +1106,8 @@ function TextInputField:update(dt)
 			self:performKeyAction(self.repeatKey)
 		end
 	end
+
+	self:syncFromBoundValue()
 end
 
 -- handles text input event

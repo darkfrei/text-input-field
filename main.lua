@@ -19,7 +19,7 @@ local playerData = {
 -- called once at startup
 function love.load()
 	love.window.setTitle('demo text-input-field.lua')
-	love.window.setMode(1200, 800)
+	love.window.setMode(1280, 800)
 	love.graphics.setBackgroundColor(0.1, 0.1, 0.12)
 
 	-- load fonts
@@ -33,41 +33,41 @@ function love.load()
 			y = 60,
 			w = 300,
 			font = font20,
-			singleLine = true, -- no newlines allowed
---		minLines = 1,
+			singleLine = true,
 			boundTable = playerData,
-			boundKey = "name"
+			boundKey = "name",
+			hintText = "Single-line text field"
 		})
 
-	-- Example 2: Multi-line text field (description)
+-- Example 2: Multi-line text field (description)
 	field2 = TextInputField:new({
 			x = 200,
 			y = 120,
 			w = 300,
 			font = font20,
-			minLines = 3, -- minimum 3 lines visible
-			newLineIndent = "> ", -- indent for new lines
-			wrapIndent = "... ", -- indent for wrapped lines
+			minLines = 3,
+			newLineIndent = "> ",
+			wrapIndent = "... ",
 			boundTable = playerData,
-			boundKey = "description"
+			boundKey = "description",
+			hintText = "Multi-line with word wrap"
 		})
 
-	-- Example 3: Numeric field with decimal (health)
+-- Example 3: Numeric field with decimal (health)
 	field3 = TextInputField:new({
 			x = 100,
 			y = 280,
 			w = 150,
 			font = font24,
---			singleLine = true,
-			numericOnly = true, -- "float" numbers are allowed
+			numericOnly = true,
 			min = -99,
 			max = 99,
---			minLines = 1,
 			boundTable = playerData,
-			boundKey = "health"
+			boundKey = "health",
+			hintText = "float, range: [-99, 99]"
 		})
 
-	-- Example 4: Numeric field integer (score)
+-- Example 4: Numeric field integer (score)
 	field4 = TextInputField:new({
 			x = 100,
 			y = 340,
@@ -77,24 +77,26 @@ function love.load()
 			min = 1,
 			max = 9,
 			boundTable = playerData,
-			boundKey = "score"
+			boundKey = "score",
+			hintText = "integer, range: [1, 9]"
 		})
 
-	-- Example 5: Multi-line with limited visible lines (scrollable)
+-- Example 5: Multi-line with limited visible lines (scrollable)
 	field5 = TextInputField:new({
 			x = 600,
 			y = 60,
 			w = 400,
 			font = font18,
 			minLines = 3,
-			maxLines = 5, -- show max 5 lines, scroll the rest
+			maxLines = 5,
 			newLineIndent = "| ",
 			wrapIndent = " ",
 			boundTable = playerData,
-			boundKey = "notes"
+			boundKey = "notes",
+			hintText = "Scrollable (max 5 visible lines)"
 		})
 
-	-- Example 6: Simple text field without binding
+-- Example 6: Simple text field without binding
 	field6 = TextInputField:new({
 			x = 600,
 			y = 280,
@@ -105,10 +107,11 @@ function love.load()
 			bgColor = {0.15, 0.15, 0.2},
 			borderColor = {0.5, 0.3, 0.7},
 			textColor = {0.9, 0.95, 1.0},
-			cursorColor = {1, 0.8, 0.3}
+			cursorColor = {1, 0.8, 0.3},
+			hintText = "Standalone field (no binding)"
 		})
 
-	-- numbers integer
+-- Example 7: numbers integer
 	field7 = TextInputField:new({
 			x = 600,
 			y = 360,
@@ -116,28 +119,29 @@ function love.load()
 			text = "200",
 			font = font20,
 			numeric = "integer",
---			minLines = 1,
 			maxLines = 1,
 			bgColor = {0.15, 0.15, 0.2},
 			borderColor = {0.5, 0.3, 0.7},
 			textColor = {0.9, 0.95, 1.0},
-			cursorColor = {1, 0.8, 0.3}
+			cursorColor = {1, 0.8, 0.3},
+			hintText = "integer (no range)"
 		})
 
-	-- Example 8: Numeric field float (standalone)
+-- Example 8: Numeric field float (standalone)
 	field8 = TextInputField:new({
 			x = 750,
 			y = 360,
 			w = 150,
-			text = "3.1416", -- initial value
+			text = "3.1416",
 			font = font20,
-			numericOnly = true, -- allow float numbers
+			numericOnly = true,
 			min = -1000,
 			max = 1000,
 			bgColor = {0.15, 0.15, 0.2},
 			borderColor = {0.5, 0.3, 0.7},
 			textColor = {0.9, 0.95, 1.0},
-			cursorColor = {1, 0.8, 0.3}
+			cursorColor = {1, 0.8, 0.3},
+			hintText = "float, range: [-1000, 1000]"
 		})
 end
 
@@ -153,11 +157,11 @@ function love.update(dt)
 	field8:update(dt)
 
 	-- optionally sync from bound values (if changed externally)
-	field1:syncFromBoundValue()
-	field2:syncFromBoundValue()
-	field3:syncFromBoundValue()
-	field4:syncFromBoundValue()
-	field5:syncFromBoundValue()
+--	field1:syncFromBoundValue()
+--	field2:syncFromBoundValue()
+--	field3:syncFromBoundValue()
+--	field4:syncFromBoundValue()
+--	field5:syncFromBoundValue()
 end
 
 function love.draw()
@@ -194,10 +198,10 @@ function love.draw()
 			playerData.name, type(playerData.name)), 20, 405)
 	love.graphics.print(string.format(' description: "%s..." (type: %s)', 
 			playerData.description:sub(1, 600), type(playerData.description)), 20, 430)
-	
+
 	love.graphics.print(string.format(' health: %.2f (type: %s)', 
 			tonumber(playerData.health) or 0, type(playerData.health)), 20, 500)
-	
+
 	love.graphics.print(string.format(' score: %s (type: %s)', 
 			playerData.score, type(playerData.score)), 20, 515)
 	love.graphics.print(string.format(' notes: %d lines (type: %s)', 
