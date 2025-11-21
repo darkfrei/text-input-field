@@ -2,6 +2,7 @@
 -- standalone text input field module
 -- https://github.com/darkfrei/love2d-lua-tests/tree/main/text-input-field
 -- https://github.com/darkfrei/text-input-field/tree/main
+-- version: 2025-11-21
 
 local utf8 = require("utf8")
 
@@ -456,23 +457,23 @@ end
 -- updates bound table value from current text
 function TextInputField:updateBoundValue()
 	if not self.boundTable or not self.boundKey then return end
-	
+
 	if not self.numeric then
 		self.boundTable[self.boundKey] = self.text
 		return
 	end
-	
+
 	-- numeric field
 	local textStr = tostring(self.text)
-	
+
 	if textStr == "" or textStr == "-" or textStr == "-." then
 		self.boundTable[self.boundKey] = nil
 		return
 	end
-	
+
 	local normalizedText = textStr:gsub(",", ".")
 	local num = tonumber(normalizedText)
-	
+
 	if num and self:isWithinRange(num) then
 		if self.numeric == "integer" or self.numeric == "int" then
 			self.boundTable[self.boundKey] = math.floor(num)
@@ -825,236 +826,367 @@ function TextInputField:performKeyAction(key)
 	end
 end
 
--- handles key press with shortcuts and repeat
-function TextInputField:keypressed(key, scancode)
-	if not self.isActive then return false end
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
 
-	local hasSelection = self.selStart and self.selEnd and self.selStart ~= self.selEnd
-	local ctrl = love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl")
-	local shift = love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift")
+--function TextInputField:keyPressedLeft(shift, ctrl)
+--	if shift and ctrl then
+--		-- select previous word
+--		self:selectToPrevWord()
+--		return
+--	end
 
-	local handled = false
+--	if ctrl then
+--		-- jump to previous word
+--		self:jumpToPrevWord()
+--		return
+--	end
 
-	if ctrl and shift then
-		-- ctrl+shift combinations (reserved)
-	elseif ctrl and not shift then
-		if key == "a" then
-			self.selAnchor = 0
-			self.selStart = 0
-			self.selEnd = utf8.len(self.text)
-			return true
-		elseif key == "c" then
-			if hasSelection then
-				local s, e = self:getSelectionRange()
-				local selectedText = utf8.sub(self.text, s, e)
-				love.system.setClipboardText(selectedText)
+--	if shift then
+--		-- select left
+--		if not self.selAnchor then self.selAnchor = self.cursorPos end
+--		if self.cursorPos > 0 then self.cursorPos = self.cursorPos - 1 end
+--		self.selStart = self.selAnchor
+--		self.selEnd = self.cursorPos
+--		self:updateDesiredX()
+--		self:ensureCursorVisible()
+--		self:startKeyRepeat("left")
+--		return
+--	end
+
+--	-- normal move left
+--	if self.cursorPos > 0 then
+--		self.cursorPos = self.cursorPos - 1
+--	end
+
+--	self.selAnchor = nil
+--	self:updateDesiredX()
+--	self:ensureCursorVisible()
+--	self:startKeyRepeat("left")
+--end
+
+
+--function TextInputField:keyPressedRight(shift, ctrl)
+--	if shift and ctrl then
+--		-- select next word
+--		self:selectToNextWord()
+--		return
+--	end
+
+--	if ctrl then
+--		-- jump to next word
+--		self:jumpToNextWord()
+--		return
+--	end
+
+--	if shift then
+--		-- select right
+--		if not self.selAnchor then self.selAnchor = self.cursorPos end
+--		if self.cursorPos < utf8.len(self.text) then
+--			self.cursorPos = self.cursorPos + 1
+--		end
+--		self.selStart = self.selAnchor
+--		self.selEnd = self.cursorPos
+--		self:updateDesiredX()
+--		self:ensureCursorVisible()
+--		self:startKeyRepeat("right")
+--		return
+--	end
+
+--	-- normal move right
+--	if self.cursorPos < utf8.len(self.text) then
+--		self.cursorPos = self.cursorPos + 1
+--	end
+
+--	self.selAnchor = nil
+--	self:updateDesiredX()
+--	self:ensureCursorVisible()
+--	self:startKeyRepeat("right")
+--end
+
+-- horizontal movement handler
+function TextInputField:keyPressedHorizontal(key, shift, ctrl)
+	if shift and ctrl then
+		if key == "left" then self:selectToPrevWord() end
+		if key == "right" then self:selectToNextWord() end
+		return
+	end
+
+	if ctrl then
+		if key == "left" then self:jumpToPrevWord() end
+		if key == "right" then self:jumpToNextWord() end
+		return
+	end
+
+	if shift then
+		if not self.selAnchor then self.selAnchor = self.cursorPos end
+		if key == "left" and self.cursorPos > 0 then self.cursorPos = self.cursorPos - 1 end
+		if key == "right" and self.cursorPos < utf8.len(self.text) then self.cursorPos = self.cursorPos + 1 end
+		self.selStart = self.selAnchor
+		self.selEnd = self.cursorPos
+		self:updateDesiredX()
+		self:ensureCursorVisible()
+		self:startKeyRepeat(key)
+		return
+	end
+
+	-- normal move
+	if key == "left" and self.cursorPos > 0 then self.cursorPos = self.cursorPos - 1 end
+	if key == "right" and self.cursorPos < utf8.len(self.text) then self.cursorPos = self.cursorPos + 1 end
+	self.selAnchor = nil
+	self:updateDesiredX()
+	self:ensureCursorVisible()
+	self:startKeyRepeat(key)
+end
+
+-- vertical movement handler
+function TextInputField:keyPressedVertical(key, shift, ctrl)
+	if shift and ctrl then
+		if key == "up" then self:selectToPrevParagraph() end
+		if key == "down" then self:selectToNextParagraph() end
+		return
+	end
+
+	if ctrl then
+		if key == "up" then self:jumpToPrevParagraph() end
+		if key == "down" then self:jumpToNextParagraph() end
+		return
+	end
+
+	if shift then
+		if not self.selAnchor then self.selAnchor = self.cursorPos end
+		if key == "up" then self:moveCursorVertical(-1) end
+		if key == "down" then self:moveCursorVertical(1) end
+		self.selStart = self.selAnchor
+		self.selEnd = self.cursorPos
+		self:startKeyRepeat(key)
+		return
+	end
+
+	-- normal move
+	if key == "up" then self:moveCursorVertical(-1) end
+	if key == "down" then self:moveCursorVertical(1) end
+	self.selAnchor = nil
+	self:startKeyRepeat(key)
+end
+
+function TextInputField:keyPressedHome(shift, ctrl)
+	local allLines, allStarts = self:getWrappedLines()
+	local idx = self:findCursorLine(allLines, allStarts)
+	local lineStart = allStarts[idx] or 0
+
+	if shift then
+		-- shift+home selects to line start or to text start
+		if not self.selAnchor then self.selAnchor = self.cursorPos end
+
+		if ctrl then
+			self.cursorPos = 0 -- select to text start
+		else
+			if self.cursorPos == lineStart then
+				self.cursorPos = 0 -- second press selects whole text start
+			else
+				self.cursorPos = lineStart
 			end
-			return true
-		elseif key == "v" then
-			local clipText = love.system.getClipboardText()
-			if clipText and clipText ~= "" then
-				local validText = ""
-				for _, char in utf8.codes(clipText) do
-					local charStr = utf8.char(char)
-					if self:isCharAllowed(charStr) then
-						validText = validText .. charStr
-					end
-				end
-
-				if validText ~= "" then
-					local testText
-					if hasSelection then
-						local s, e = self:getSelectionRange()
-						local before = utf8.sub(self.text, 1, s - 1)
-						local after = utf8.sub(self.text, e + 1)
-						testText = before .. validText .. after
-					else
-						local before = utf8.sub(self.text, 1, self.cursorPos)
-						local after = utf8.sub(self.text, self.cursorPos + 1)
-						testText = before .. validText .. after
-					end
-
-					if self:isValidNumber(testText) then
-						if hasSelection then
-							self:replaceSelection(validText)
-						else
-							local before = utf8.sub(self.text, 1, self.cursorPos)
-							local after = utf8.sub(self.text, self.cursorPos + 1)
-							self.text = before .. validText .. after
-							self.cursorPos = self.cursorPos + utf8.len(validText)
-							self:invalidateCache()
-						end
-						self:updateDesiredX()
-						self:updateHeight()
-						self:updateBoundValue()
-					end
-				end
-			end
-			return true
-		elseif key == "x" then
-			if hasSelection then
-				local s, e = self:getSelectionRange()
-
-				local selectedText = utf8.sub(self.text, s, e)
-				love.system.setClipboardText(selectedText)
-				self:replaceSelection(nil)
-				self:updateDesiredX()
-				self:updateHeight()
-			end
-			return true
 		end
 
-	elseif shift and not ctrl then
-		if key == "left" then
-			if not self.selAnchor then
-				self.selAnchor = self.cursorPos
-			end
-			if self.cursorPos > 0 then
-				self.cursorPos = self.cursorPos - 1
-			end
-			self.selStart = self.selAnchor
-			self.selEnd = self.cursorPos
-			self:updateDesiredX()
-			self:ensureCursorVisible()
-			self:startKeyRepeat("left")
-			handled = true
+		self.selStart = self.selAnchor
+		self.selEnd = self.cursorPos
+		self:updateDesiredX()
+		self:ensureCursorVisible()
+		return
+	end
 
-		elseif key == "right" then
-			if not self.selAnchor then
-				self.selAnchor = self.cursorPos
-			end
-			if self.cursorPos < utf8.len(self.text) then
-				self.cursorPos = self.cursorPos + 1
-			end
-			self.selStart = self.selAnchor
-			self.selEnd = self.cursorPos
-			self:updateDesiredX()
-			self:ensureCursorVisible()
-			self:startKeyRepeat("right")
-			handled = true
+	if ctrl then
+		-- ctrl + home = jump to start of text
+		self.cursorPos = 0
+		self.selAnchor = nil
+		self:updateDesiredX()
+		self:ensureCursorVisible()
+		return
+	end
 
-		elseif key == "up" then
-			if not self.selAnchor then
-				self.selAnchor = self.cursorPos
-			end
-			self:moveCursorVertical(-1)
-			self.selStart = self.selAnchor
-			self.selEnd = self.cursorPos
-			self:startKeyRepeat("up")
-			handled = true
+	-- normal home = go to start of wrapped line
+	self.cursorPos = lineStart
+	self.selAnchor = nil
+	self:updateDesiredX()
+	self:ensureCursorVisible()
+end
 
-		elseif key == "down" then
-			if not self.selAnchor then
-				self.selAnchor = self.cursorPos
+function TextInputField:keyPressedEnd(shift, ctrl)
+	local allLines, allStarts = self:getWrappedLines()
+	local idx = self:findCursorLine(allLines, allStarts)
+
+	local lineStart = allStarts[idx] or 0
+	local lineLen = utf8.len(allLines[idx] or "")
+	local lineEnd = lineStart + lineLen
+	local textEnd = utf8.len(self.text)
+
+	if shift then
+		-- shift+end selects to line end or text end
+		if not self.selAnchor then self.selAnchor = self.cursorPos end
+
+		if ctrl then
+			self.cursorPos = textEnd
+		else
+			if self.cursorPos == lineEnd then
+				self.cursorPos = textEnd -- second press selects whole text end
+			else
+				self.cursorPos = lineEnd
 			end
-			self:moveCursorVertical(1)
-			self.selStart = self.selAnchor
-			self.selEnd = self.cursorPos
-			self:startKeyRepeat("down")
-			handled = true
 		end
 
+		self.selStart = self.selAnchor
+		self.selEnd = self.cursorPos
+		self:updateDesiredX()
+		self:ensureCursorVisible()
+		return
+	end
+
+	if ctrl then
+		-- ctrl + end = jump to end of text
+		self.cursorPos = textEnd
+		self.selAnchor = nil
+		self:updateDesiredX()
+		self:ensureCursorVisible()
+		return
+	end
+
+	-- normal end = go to end of wrapped line
+	self.cursorPos = lineEnd
+	self.selAnchor = nil
+	self:updateDesiredX()
+	self:ensureCursorVisible()
+end
+
+function TextInputField:keyPressedRemove(key, shift, ctrl)
+	-- if there is a selection, delete it
+	if self:hasSelection() then
+		self:deleteSelection()
+		return
+	end
+
+	if key == "backspace" then
+		self:backspaceInternal() -- remove character before cursor
 	else
-		if self.selAnchor then
-			self.cursorPos = math.max(self.selAnchor, self.cursorPos)
-			self.selAnchor = nil
+		self:deleteInternal()    -- remove character after cursor
+	end
+end
+
+-- check if there is a text selection in the active field
+function TextInputField:hasSelection()
+	return self.selStart ~= nil and self.selEnd ~= nil and self.selStart ~= self.selEnd
+end
+
+-- remove character before cursor in the active field
+function TextInputField:backspaceInternal()
+	if self.cursorPos > 0 then
+		local before = utf8.sub(self.text, 1, self.cursorPos - 1)
+		local after = utf8.sub(self.text, self.cursorPos + 1)
+		self.text = before .. after
+		self.cursorPos = self.cursorPos - 1
+		self:invalidateCache()
+		self:updateBoundValue()
+	end
+end
+
+-- remove character after cursor in the active field
+function TextInputField:deleteInternal()
+	if self.cursorPos < utf8.len(self.text) then
+		local before = utf8.sub(self.text, 1, self.cursorPos)
+		local after = utf8.sub(self.text, self.cursorPos + 2)
+		self.text = before .. after
+		self:invalidateCache()
+		self:updateBoundValue()
+	end
+end
+
+-- cut/copy/paste handler
+function TextInputField:keyPressedCutCopyPaste(key, shift, ctrl)
+	if key == "a" then
+		self.selAnchor = 0
+		self.selStart = 0
+		self.selEnd = utf8.len(self.text)
+	elseif key == "c" then
+		if self:hasSelection() then
+			local s, e = self:getSelectionRange()
+			love.system.setClipboardText(utf8.sub(self.text, s, e))
 		end
-
-		if key == "backspace" then
-			self:performKeyAction("backspace")
-			self:startKeyRepeat("backspace")
-			handled = true
-
-		elseif key == "delete" then
-			self:performKeyAction("delete")
-			self:startKeyRepeat("delete")
-			handled = true
-
-		elseif key == "left" then
-			if hasSelection then
-				local s = math.min(self.selStart, self.selEnd)
-				self.cursorPos = s
-				self:clearSelection()
-				self:updateDesiredX()
-			else
-				self:performKeyAction("left")
-				self:startKeyRepeat("left")
+	elseif key == "x" then
+		if self:hasSelection() then
+			local s, e = self:getSelectionRange()
+			love.system.setClipboardText(utf8.sub(self.text, s, e))
+			self:deleteSelection()
+		end
+	elseif key == "v" then
+		local clipText = love.system.getClipboardText()
+		if clipText and clipText ~= "" then
+			local filtered = ""
+			for _, c in utf8.codes(clipText) do
+				local ch = utf8.char(c)
+				if self:isCharAllowed(ch) then filtered = filtered .. ch end
 			end
-			handled = true
-
-		elseif key == "right" then
-			if hasSelection then
-				local e = math.max(self.selStart, self.selEnd)
-				self.cursorPos = e
-				self:clearSelection()
-				self:updateDesiredX()
-			else
-				self:performKeyAction("right")
-				self:startKeyRepeat("right")
-			end
-			handled = true
-
-		elseif key == "up" then
-			self:performKeyAction("up")
-			self:clearSelection()
-			self:startKeyRepeat("up")
-			handled = true
-
-		elseif key == "down" then
-			self:performKeyAction("down")
-			self:clearSelection()
-			self:startKeyRepeat("down")
-			handled = true
-
-		elseif key == "return" then
-			if not self.singleLine then
-				if hasSelection then
-					self:replaceSelection("\n")
+			if filtered ~= "" then
+				if self:hasSelection() then
+					self:replaceSelection(filtered)
 				else
 					local before = utf8.sub(self.text, 1, self.cursorPos)
 					local after = utf8.sub(self.text, self.cursorPos + 1)
-					self.text = before .. "\n" .. after
-					self.cursorPos = self.cursorPos + 1
+					self.text = before .. filtered .. after
+					self.cursorPos = self.cursorPos + utf8.len(filtered)
 					self:invalidateCache()
 					self:updateBoundValue()
 				end
 				self:updateDesiredX()
 				self:updateHeight()
-				self:clearSelection()
-				self:ensureCursorVisible()
-				handled = true
 			end
-
-		elseif key == "tab" then
-			if hasSelection then
-				self:replaceSelection("\t")
-			else
-				local before = utf8.sub(self.text, 1, self.cursorPos)
-				local after = utf8.sub(self.text, self.cursorPos + 1)
-				self.text = before .. "\t" .. after
-				self.cursorPos = self.cursorPos + 1
-				self:invalidateCache()
-				self:updateBoundValue()
-			end
-			self:updateDesiredX()
-			self:updateHeight()
-			self:ensureCursorVisible()
-			handled = true
-
-		elseif key == "home" then
-			self:moveCursorHome()
-			self:clearSelection()
-			handled = true
-
-		elseif key == "end" then
-			self:moveCursorEnd()
-			self:clearSelection()
-			handled = true
 		end
 	end
-
-	return handled
 end
+
+---------------------------------------------
+
+-- handles key press with shortcuts and repeat
+function TextInputField:keypressed(key)
+	-- only process keys if this field is active
+	if not self.isActive then 
+		-- field inactive -> ignore input, return false
+		return false
+	end
+
+	local shift = love.keyboard.isDown("lshift", "rshift")
+	local ctrl  = love.keyboard.isDown("lctrl", "rctrl")
+
+	if key == "left" or key == "right" then
+		self:keyPressedHorizontal(key, shift, ctrl)
+
+	elseif key == "up" or key == "down" then
+		self:keyPressedVertical(key, shift, ctrl)
+
+	elseif key == "home" then
+		self:keyPressedHome(shift, ctrl)
+
+	elseif key == "end" then
+		self:keyPressedEnd(shift, ctrl)
+
+	elseif key == "backspace" or key == "delete" then
+		self:keyPressedRemove(key, shift, ctrl)
+
+	elseif ctrl then
+		self:keyPressedCutCopyPaste(key, shift, ctrl)
+
+	else
+		-- key not handled -> return false
+		return false
+	end
+
+	-- key handled by one of the sub-functions -> return true
+	return true
+end
+
+-----------------------------------------------------------
+-----------------------------------------------------------
+-----------------------------------------------------------
 
 -- handles key repeat in update loop
 function TextInputField:update(dt)
