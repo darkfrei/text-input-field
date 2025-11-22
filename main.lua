@@ -7,6 +7,14 @@ local utf8 = require("utf8")
 
 local field1, field2, field3, field4
 local field5, field6, field7, field8
+local field9
+
+-- load fonts
+local font18 = love.graphics.newFont("fonts/NotoSans-Regular.ttf", 18)
+local font20 = love.graphics.newFont("fonts/NotoSans-Regular.ttf", 20)
+local font24 = love.graphics.newFont("fonts/NotoSans-Regular.ttf", 24)
+
+local fontMono = love.graphics.newFont("fonts/FiraMono-Regular.ttf", 18)
 
 local playerData = {
 	name = "ABCD",
@@ -22,10 +30,7 @@ function love.load()
 	love.window.setMode(1280, 800)
 	love.graphics.setBackgroundColor(0.1, 0.1, 0.12)
 
-	-- load fonts
-	local font18 = love.graphics.newFont("fonts/NotoSans-Regular.ttf", 18)
-	local font20 = love.graphics.newFont("fonts/NotoSans-Regular.ttf", 20)
-	local font24 = love.graphics.newFont("fonts/NotoSans-Regular.ttf", 24)
+
 
 	-- Example 1: Single-line text field (name)
 	field1 = TextInputField:new({
@@ -143,6 +148,19 @@ function love.load()
 			cursorColor = {1, 0.8, 0.3},
 			hintText = "float, range: [-1000, 1000]"
 		})
+
+	field9 = TextInputField:new({
+			x = 600,
+			y = 460,
+			w = 600,
+			font = font20,
+			fixedFont = fontMono,
+			highlightColor = {1, 0.8, 0.2},
+			viewMode = false,  -- start in edit mode
+			minLines = 5,
+			text = "<fix>Высота: <clr>150.25 м<clrEnd></fix>\n<clr>Внимание!<clrEnd> Тест форматирования",
+			hintText = "Toggle with 'F2' key"
+		})
 end
 
 -- called every frame, updates fields and input repeat
@@ -155,13 +173,8 @@ function love.update(dt)
 	field6:update(dt)
 	field7:update(dt)
 	field8:update(dt)
+	field9:update(dt)
 
-	-- optionally sync from bound values (if changed externally)
---	field1:syncFromBoundValue()
---	field2:syncFromBoundValue()
---	field3:syncFromBoundValue()
---	field4:syncFromBoundValue()
---	field5:syncFromBoundValue()
 end
 
 function love.draw()
@@ -189,6 +202,7 @@ function love.draw()
 	field6:draw()
 	field7:draw()
 	field8:draw()
+	field9:draw()
 
 	-- display bound data
 	love.graphics.setColor(0.7, 0.9, 0.7)
@@ -280,9 +294,12 @@ function love.textinput(t)
 	field6:textinput(t)
 	field7:textinput(t)
 	field8:textinput(t)
+	field9:textinput(t)
 end
 
-function love.keypressed(key)
+function love.keypressed(key, scancode)
+--	print (key, scancode)
+	
 	if key == "escape" then
 		love.event.quit()
 		return
@@ -301,6 +318,7 @@ function love.keypressed(key)
 	field6:keypressed(key)
 	field7:keypressed(key)
 	field8:keypressed(key)
+	field9:keypressed(key)
 end
 
 -- handles key release (for stopping long key repeats)
@@ -313,6 +331,7 @@ function love.keyreleased(key)
 	field6:keyreleased(key)
 	field7:keyreleased(key)
 	field8:keyreleased(key)
+	field9:keyreleased(key)
 end
 
 -- handles mouse clicks to activate or position cursor
@@ -325,6 +344,7 @@ function love.mousepressed(mx, my, button)
 	field6:mousepressed(mx, my, button)
 	field7:mousepressed(mx, my, button)
 	field8:mousepressed(mx, my, button)
+	field9:mousepressed(mx, my, button)
 end
 
 -- handles mouse dragging to update selection
@@ -337,6 +357,7 @@ function love.mousemoved(mx, my, dx, dy)
 	field6:mousemoved(mx, my, dx, dy)
 	field7:mousemoved(mx, my, dx, dy)
 	field8:mousemoved(mx, my, dx, dy)
+	field9:mousemoved(mx, my, dx, dy)
 end
 
 -- handles mouse release to end selection drag
@@ -349,6 +370,7 @@ function love.mousereleased(mx, my, button)
 	field6:mousereleased(mx, my, button)
 	field7:mousereleased(mx, my, button)
 	field8:mousereleased(mx, my, button)
+	field9:mousereleased(mx, my, button)
 end
 
 

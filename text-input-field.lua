@@ -2,7 +2,7 @@
 -- standalone text input field module
 -- https://github.com/darkfrei/love2d-lua-tests/tree/main/text-input-field
 -- https://github.com/darkfrei/text-input-field/tree/main
--- version: 2025-11-21
+-- version: 2025-11-22
 
 local utf8 = require("utf8")
 
@@ -58,7 +58,8 @@ end
 
 -- creates new text input field instance
 function TextInputField:new(config)
-	local instance = setmetatable({}, self)
+--	local instance = setmetatable({}, self)
+	local instance = setmetatable(config, self)
 
 	instance.x = config.x or 0
 	instance.y = config.y or 0
@@ -130,6 +131,12 @@ function TextInputField:new(config)
 	instance.lastMouseX = 0
 	instance.lastMouseY = 0
 
+	----
+	-- formatting options
+	instance.viewMode = config.viewMode or true  -- false = edit (show tags), true = view (hide tags, apply formatting)
+	instance.fixedFont = config.fixedFont or instance.font  -- monospace font for <fix>
+	instance.highlightColor = config.highlightColor or {1, 1, 0.3}  -- color for <clr>
+
 	return instance
 end
 
@@ -194,6 +201,14 @@ function TextInputField:setActive(active)
 		if self.onBlur then
 			self:onBlur()
 		end
+	end
+	
+	-- self.viewMode style
+	if not self.isActive then
+--	self.viewMode = false
+		self:setViewMode(true)
+	else
+		self:setViewMode(false)
 	end
 end
 
@@ -304,18 +319,25 @@ function TextInputField:moveCursorVertical(direction)
 	self:ensureCursorVisible()
 end
 
--- checks if mouse is over field
-function TextInputField:isMouseOver(mx, my)
+-- checks if mouse is inside field bounds
+function TextInputField:isMouseInside(mx, my)
 	return mx >= self.x and mx <= self.x + self.w and 
-	my >= self.y and my <= self.y + self.h
+	       my >= self.y and my <= self.y + self.h
+end
+
+-- checks if mouse is outside field bounds
+function TextInputField:isMouseOutside(mx, my)
+	return mx < self.x or mx > self.x + self.w or 
+	       my < self.y or my > self.y + self.h
 end
 
 -- handles mouse click to activate field and position cursor
 function TextInputField:mousepressed(mx, my, button)
 	if button ~= 1 then return false end
 
-	if mx < self.x or mx > self.x + self.w or my < self.y or my > self.y + self.h then
---	if self:isMouseOver(mx, my) then
+--	if mx < self.x or mx > self.x + self.w or my < self.y or my > self.y + self.h then
+--	if self:isMouseInside(mx, my) then
+	if self:isMouseOutside(mx, my) then
 		self:setActive(false)
 		self:clearSelection()
 		return false
@@ -703,10 +725,127 @@ local function drawSelection(self, allLines, allStarts, allIsNewLine)
 	end
 end
 
--- draws indent symbols and text lines
-local function drawIndentSymbols(self, allLines, allStarts, allIsNewLine)
-	love.graphics.setFont(self.font)
+-- parses text with formatting tags (only in view mode)
+local function parseFormattedText(text, viewMode)
+	if not viewMode then
+		-- edit mode: return text as-is
+		return {{type = "normal", text = text, isFixed = false, isHighlighted = false}}
+	end
+	
+	local segments = {}
+	local pos = 1
+	local isFixed = false
+	local isHighlighted = false
+	
+	while pos <= #text do
+		local nextTag = #text + 1
+		local tagType = nil
+		
+		-- find nearest tag
+		local fixOpen = text:find("<fix>", pos, true)
+		local fixClose = text:find("</fix>", pos, true)
+		local clrOpen = text:find("<clr>", pos, true)
+		local clrClose = text:find("<clrEnd>", pos, true)
+		
+		if fixOpen and fixOpen < nextTag then nextTag, tagType = fixOpen, "fixOpen" end
+		if fixClose and fixClose < nextTag then nextTag, tagType = fixClose, "fixClose" end
+		if clrOpen and clrOpen < nextTag then nextTag, tagType = clrOpen, "clrOpen" end
+		if clrClose and clrClose < nextTag then nextTag, tagType = clrClose, "clrClose" end
+		
+		-- add text before tag
+		if nextTag > pos then
+			local chunk = text:sub(pos, nextTag - 1)
+			if #chunk > 0 then
+				table.insert(segments, {
+					type = "text",
+					text = chunk,
+					isFixed = isFixed,
+					isHighlighted = isHighlighted
+				})
+			end
+		end
+		
+		-- process tag
+		if tagType == "fixOpen" then
+			isFixed = true
+			pos = nextTag + 5
+		elseif tagType == "fixClose" then
+			isFixed = false
+			pos = nextTag + 6
+		elseif tagType == "clrOpen" then
+			isHighlighted = true
+			pos = nextTag + 5
+		elseif tagType == "clrClose" then
+			isHighlighted = false
+			pos = nextTag + 8
+		else
+			break
+		end
+	end
+	
+	return segments
+end
 
+-- draws formatted text line with tag support
+local function drawFormattedLine(self, lineText, x, y)
+	if not self.viewMode then
+		-- edit mode: simple draw
+		love.graphics.setFont(self.font)
+		love.graphics.setColor(self.textColor)
+		love.graphics.print(lineText, x, y)
+		return
+	end
+	
+	-- view mode: parse and apply formatting
+	local segments = parseFormattedText(lineText, self.viewMode)
+	local offsetX = 0
+	
+	for _, seg in ipairs(segments) do
+		if seg.type == "text" then
+			-- choose font
+			local font = seg.isFixed and self.fixedFont or self.font
+			love.graphics.setFont(font)
+			
+			-- choose color
+			if seg.isHighlighted then
+				love.graphics.setColor(self.highlightColor)
+			else
+				love.graphics.setColor(self.textColor)
+			end
+			
+			-- draw text
+			love.graphics.print(seg.text, x + offsetX, y)
+			offsetX = offsetX + font:getWidth(seg.text)
+		end
+	end
+end
+
+---- draws indent symbols and text lines
+--local function drawIndentSymbols(self, allLines, allStarts, allIsNewLine)
+--	love.graphics.setFont(self.font)
+
+--	local startLine = self.scrollLineOffset + 1
+--	local endLine = self.maxLines and (self.scrollLineOffset + self.maxLines) or #allLines
+
+--	local drawY = self.y + self.paddingY
+--	for i = startLine, math.min(endLine, #allLines) do
+--		local indent = allIsNewLine[i] and self.newLineIndent or self.wrapIndent
+--		local indentX = allIsNewLine[i] and self.newLineIndentWidth or self.wrapIndentWidth
+
+--		if indent ~= "" then
+--			love.graphics.setColor(self.textColor[1] * 0.4, self.textColor[2] * 0.4, self.textColor[3] * 0.4)
+--			love.graphics.print(indent, self.x + self.paddingX, drawY)
+--		end
+
+--		love.graphics.setColor(self.textColor)
+--		love.graphics.print(allLines[i], self.x + self.paddingX + indentX, drawY)
+
+--		drawY = drawY + self.lineHeight
+--	end
+--end
+
+
+local function drawIndentSymbols(self, allLines, allStarts, allIsNewLine)
 	local startLine = self.scrollLineOffset + 1
 	local endLine = self.maxLines and (self.scrollLineOffset + self.maxLines) or #allLines
 
@@ -716,12 +855,13 @@ local function drawIndentSymbols(self, allLines, allStarts, allIsNewLine)
 		local indentX = allIsNewLine[i] and self.newLineIndentWidth or self.wrapIndentWidth
 
 		if indent ~= "" then
+			love.graphics.setFont(self.font)
 			love.graphics.setColor(self.textColor[1] * 0.4, self.textColor[2] * 0.4, self.textColor[3] * 0.4)
 			love.graphics.print(indent, self.x + self.paddingX, drawY)
 		end
 
-		love.graphics.setColor(self.textColor)
-		love.graphics.print(allLines[i], self.x + self.paddingX + indentX, drawY)
+		-- draw line with formatting support
+		drawFormattedLine(self, allLines[i], self.x + self.paddingX + indentX, drawY)
 
 		drawY = drawY + self.lineHeight
 	end
@@ -1059,6 +1199,16 @@ function TextInputField:keyPressedEnd(shift, ctrl)
 	self:ensureCursorVisible()
 end
 
+-- deletes selected text
+function TextInputField:deleteSelection()
+	if not self:hasSelection() then return false end
+	
+	self:replaceSelection(nil)
+	self:updateDesiredX()
+	self:updateHeight()
+	return true
+end
+
 function TextInputField:keyPressedRemove(key, shift, ctrl)
 	-- if there is a selection, delete it
 	if self:hasSelection() then
@@ -1145,6 +1295,24 @@ function TextInputField:keyPressedCutCopyPaste(key, shift, ctrl)
 end
 
 ---------------------------------------------
+-- start style
+
+
+
+
+function TextInputField:setViewMode(enabled)
+--	self.viewMode = not self.viewMode
+	self.viewMode = enabled
+	self:invalidateCache()
+	self:updateHeight()
+end
+
+
+
+
+
+-- end style
+---------------------------------------------
 
 -- handles key press with shortcuts and repeat
 function TextInputField:keypressed(key)
@@ -1152,6 +1320,15 @@ function TextInputField:keypressed(key)
 	if not self.isActive then 
 		-- field inactive -> ignore input, return false
 		return false
+	end
+
+	if key == "f2" then
+		if self.viewMode then
+			self:setViewMode(false)
+		else
+			self:setViewMode(true)
+		end
+		return
 	end
 
 	local shift = love.keyboard.isDown("lshift", "rshift")
@@ -1197,7 +1374,7 @@ function TextInputField:update(dt)
 	-- handle hint text visibility
 	if self.hintText then
 
-		local mouseOver = self:isMouseOver(mx, my)
+		local mouseOver = self:isMouseInside(mx, my)
 
 		if mouseOver and not self.isActive then
 			-- check if mouse moved
@@ -1448,6 +1625,85 @@ TextInputField:isValidNumber(text) > bool
 
 TextInputField:draw() > nil
 ]]--
+
+
+--[[
+specformat tags specification
+
+this block defines all supported tags and their expected behavior
+all formatting is applied during draw
+the raw text remains unchanged
+cursor and selection use raw text only
+
+todo:
+- write tokenizer to detect tags and expression blocks
+- write state machine for fix and clr
+- write expression parser
+- integrate with utf8 segmentation
+- integrate with wrapping and cursor positioning
+- implement renderer that draws segments in order
+
+tags:
+
+<fix> ... </fix>
+		enables monospaced font for the enclosed text;
+		no nesting effects; while inside fix mode, renderer switches to fixedWidthFont
+		when </fix> is encountered, renderer returns to normal font
+
+<clr> ... <clrEnd>
+		enables highlight color until clrEnd;
+		no nesting effects; only one global highlightColor is used
+		renderer switches to highlightColor when <clr> is entered
+		renderer returns to normal color when <clrEnd> is encountered
+
+{ ... }
+		inline expression block; treated as a single unit;
+		supports variables like [p35], integer arithmetic, +, -, *, div, mod, parentheses;
+		the renderer must evaluate the expression during draw;
+		on error, fallback behavior is to output the raw block;
+
+[pX]
+		variable reference inside expression blocks; x is an integer;
+		variables must be provided dynamically by the caller or by the quest engine;
+		variable resolution is only meaningful inside expressions;
+
+general rules:
+		- tags never appear in rendered output;
+		- formatting must not change inside a single unicode codepoint;
+		- expression blocks are atomic and must not be split into multiple segments;
+		- tags must be recognized even when surrounded by utf8 characters;
+		- unclosed tags are allowed but behavior is undefined for now;
+		- formatting state includes: isFixed, isHighlighted;
+
+required renderer state fields:
+		isFixed = false
+		isHighlighted = false
+		currentFont = normalFont
+		currentColor = normalColor
+
+expected state transitions:
+		on "<fix>"      -> isFixed = true,  currentFont = fixedWidthFont
+		on "</fix>"     -> isFixed = false, currentFont = normalFont
+		on "<clr>"      -> isHighlighted = true,  currentColor = highlightColor
+		on "<clrEnd>"   -> isHighlighted = false, currentColor = normalColor
+
+segment building rules:
+		- scan the text and produce a list of segments;
+		- each segment holds:
+				text: raw utf8 substring without tags
+				isFixed: boolean
+				isHighlighted: boolean
+		- segments may be merged when adjacent with identical state;
+
+evaluation rules for expressions:
+		- evaluate only inside {...}
+		- do not evaluate if parsing fails
+		- variable lookup is read-only
+		- negative numbers are allowed
+		- implement integer operations: div (integer division), mod (modulo)
+
+
+]]
 
 
 return TextInputField
